@@ -104,16 +104,18 @@ new_mask[4:8, 4:8, 4:8] = 1
 new_data = np.zeros([10,10,10, 2])
 new_data[4:8, 4:8, 4:8] = data
 kwargs['shape'] = new_mask.shape
-centers = gen_searchlight_ind(thr=0, mask=new_mask, **kwargs)
+centers = gen_searchlight_ind(thr=1, mask=new_mask, **kwargs)
 result4 = run_searchlight(centers, np.shape, new_data, center_kwargs=kwargs)
 
 result4
-
-#{(4, 4, 4): (27, 2),
-# (4, 4, 5): (27, 2),
-# (4, 4, 6): (27, 2),
-# ...
-#}
+#{(5, 5, 5): (27, 2),
+# (5, 5, 6): (27, 2),
+# (5, 6, 5): (27, 2),
+# (5, 6, 6): (27, 2),
+# (6, 5, 5): (27, 2),
+# (6, 5, 6): (27, 2),
+# (6, 6, 5): (27, 2),
+# (6, 6, 6): (27, 2)}
 ```
 
 After making this example, I decided to should probably add an option to require searchlight is completely within array.
