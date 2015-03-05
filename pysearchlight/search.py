@@ -13,7 +13,7 @@ from methods import pattern_similarity
 
 # TODO rename cutoff of radius?
 @arg('--mask', type=load_nii_or_npy)
-def gen_searchlight_ind(centers=None, cutoff=5, mask=None, thr=.7, output=''):
+def gen_searchlight_ind(centers=None, mask=None, thr=.7, output='', **kwargs):
     """Find all indices from centers with usable voxels over threshold.
 
     Parameters:
@@ -22,18 +22,25 @@ def gen_searchlight_ind(centers=None, cutoff=5, mask=None, thr=.7, output=''):
         mask:    3d spatial mask (of usable voxels set to 1)
         thr :    proportion of usable voxels necessary
         output : optional file to output centers and center kwargs to
+        kwargs: arguments to pass to searchlight_ind
 
     Returns:
         2-Tuple of usable centers, and list with indices from searchlight_ind function.
     """
-    # make centers a list of 3-tuple coords if not given
+    # make centers a list of 3-tuple coords  of nonzero mask values if not given
+    mask = mask.copy()
+    mask[np.isnan(mask)] = 0
     centers = zip(*np.nonzero(mask)) if centers is None else centers
+
+    # add mask to kwargs if not there
+    if not kwargs.get('shape'): kwargs['shape'] = mask.shape
 
     good_center = []
     cycle = 0
     for center in centers:
         cycle += 1
-        ind = searchlight_ind(center, cutoff, mask.shape)
+        # TODO need to get number of max possible indices
+        ind = searchlight_ind(center, **kwargs)
         if mask[ind].mean() >= thr:     # TODO chokes on nans?
             #all_inds.append(ind)
             good_center.append(center)
@@ -42,7 +49,7 @@ def gen_searchlight_ind(centers=None, cutoff=5, mask=None, thr=.7, output=''):
     if output: 
         # For now, just store good center points
         np.save(output, {'centers' : good_center,
-                         'kwargs'  : dict(cutoff=cutoff, shape=mask.shape)}
+                         'kwargs'  : kwargs}
                          )
         return "finished"
 
@@ -57,7 +64,7 @@ def calc_slices(total_ind, batch_num, batch_ttl, print_uniq=False):
     Note that voxels are returned as [(x, y, z), ...]
     """
     if hasattr(total_ind, '__len__'): total_ind = len(total_ind)
-    step = total_ind / batch_ttl
+    step = total_ind / (batch_ttl - bool(total_ind % batch_ttl))
     chunks = [slice(ii, ii+step) for ii in range(0, total_ind, step)]
     return chunks[batch_num]
 
@@ -88,6 +95,8 @@ def check_output_dir(fdir, max_batch_num, centers=None):
 
 def sub_from_batches(subnum, batches, ref_nii, empty=-2):
     """Return nifti with all subject data from batches.
+
+    Assumes first dim of each output is subject.
 
     Parameters:
         subnum:  index of subject within batch entries
@@ -205,6 +214,8 @@ def run_searchlight(centers, func, d, center_kwargs=None, output="", **kwargs):
     Currently only runs pattern_disc1.
     """
 
+    if centers is None:
+        centers = gen_searchlight_ind(cutoff=center_kwargs['cutoff'], mask=np.ones(d.shape), thr=0)
 
     out = {}
     cycle = 0
@@ -214,7 +225,8 @@ def run_searchlight(centers, func, d, center_kwargs=None, output="", **kwargs):
         # Get indices from center
         ind = searchlight_ind(c, **center_kwargs)
         # Mask to get only indices used in searchlight
-        d_search = [sub[ind] for sub in d]   # sub x space[ind] x time
+        if isinstance(d, list): d_search = [sub[ind] for sub in d]   # sub x space[ind] x time
+        else: d_search = d[ind]
         # Pass to pattern comparison method
         out[c] = func(d_search, **kwargs)
 
@@ -225,7 +237,7 @@ def run_searchlight(centers, func, d, center_kwargs=None, output="", **kwargs):
 
 import scipy.spatial as spat
 def searchlight_ind(center, cutoff, shape, metric='euclidean'):
-    """Return indices for searchlight where distance < cutoff
+    """Return indices for searchlight where distance <= cutoff
 
     Parameters:
         center: point around which to make searchlight
@@ -242,9 +254,9 @@ def searchlight_ind(center, cutoff, shape, metric='euclidean'):
     z = np.arange(shape[2])
 
     #First mask the obvious points- may actually slow down your calculation depending.
-    x=x[abs(x-center[0])<cutoff]
-    y=y[abs(y-center[1])<cutoff]
-    z=z[abs(z-center[2])<cutoff]
+    x=x[abs(x-center[0])<=cutoff]
+    y=y[abs(y-center[1])<=cutoff]
+    z=z[abs(z-center[2])<=cutoff]
 
 
     #Generate grid of points
@@ -252,7 +264,7 @@ def searchlight_ind(center, cutoff, shape, metric='euclidean'):
     data=np.vstack((X.ravel(),Y.ravel(),Z.ravel())).T
     
     distance=spat.distance.cdist(data,center.reshape(1,-1), metric).ravel()
-    return data[distance<cutoff].T.tolist()   # return list like np.nonzero
+    return data[distance<=cutoff].T.tolist()   # return list like np.nonzero
 
 def main():
     parser = argh.ArghParser()
