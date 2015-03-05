@@ -15,7 +15,7 @@ result1 = run_searchlight(centers, np.mean, data, center_kwargs=kwargs)
 
 
 # -----------------------------------------------------------------------------
-# Median searchlight example
+# Min, max searchlight example
 # -----------------------------------------------------------------------------
 mask = np.ones([1,1,4])
 data = np.arange(mask.size).reshape(mask.shape)
