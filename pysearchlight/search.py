@@ -58,14 +58,19 @@ def gen_searchlight_ind(centers=None, mask=None, thr=.7, output='', **kwargs):
 @arg('total_ind', type=lambda x: np.load(x)[()]['centers'], help='total centers in searchlight')
 @arg('batch_num', type=int, help='batch number')
 @arg('batch_ttl', type=int, help='total batches')
-def calc_slices(total_ind, batch_num, batch_ttl, print_uniq=False):
+@arg('--print_uniq', type=int, help='cutoff if printing uniq voxels')
+def calc_slices(total_ind, batch_num, batch_ttl, print_uniq=0):
     """Convenience function for breaking centers into batches for parallel jobs.
     
     Note that voxels are returned as [(x, y, z), ...]
     """
-    if hasattr(total_ind, '__len__'): total_ind = len(total_ind)
+    if hasattr(total_ind, '__len__'): tmp = total_ind; total_ind = len(total_ind)
     step = total_ind / (batch_ttl - bool(total_ind % batch_ttl))
     chunks = [slice(ii, ii+step) for ii in range(0, total_ind, step)]
+
+    if print_uniq:
+        centers = tmp[chunks[batch_num]]
+        print len(unique_vox(centers, print_uniq))
     return chunks[batch_num]
 
 def unique_vox(centers, cutoff, shape=(70,70,70)):
@@ -156,6 +161,7 @@ def stitch(in_dir, out_dir, ref_nii, empty=-2, subs=None):
 
 
 
+import time
 @arg('centers', type=lambda x: np.load(x)[()]['centers'], help="npy file with center points")
 @arg('d', type=str, help="folder with data (as npy or nii)")
 @arg('center_kwargs', type=lambda x: np.load(x)[()]['kwargs'], help="npy file with kwargs for getting center points")
@@ -174,7 +180,10 @@ def run_pattern_searchlight(centers, d, center_kwargs, output,
     print "number of centers is:\t", len(centers)
     print "number of voxels is:\t", len(all_indices[0])
 
+    print "loading data..."
+    t1 = time.time()
     if type(d) is str: d = [SubMMap(fname, all_indices) for fname in glob(d)]
+    print "loading took ", time.time() - t1, " seconds"
     if type(TRs) is str: TRs = pd.read_csv(TRs)
     # prepare output directory
     try: os.makedirs(output)
@@ -194,10 +203,14 @@ def run_pattern_searchlight(centers, d, center_kwargs, output,
 # Searchlight Functions -------------------------------------------------------
 
 from glob import glob
+import gc
 class SubMMap:
     def __init__(self, fname, all_indices):
         self.fname = fname
-        self.data = self.hash_indices(load_nii_or_npy(self.fname), all_indices)
+        tmp_d = load_nii_or_npy(fname)
+        self.data = self.hash_indices(tmp_d, all_indices)
+        del tmp_d
+        gc.collect()
 
     def __getitem__(self, x):
         return np.array([self.data[ind] for ind in zip(*x)])
