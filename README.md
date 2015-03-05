@@ -95,6 +95,30 @@ result3
 # (3, 3, 3): (8, 2)}
 ```
 
+One thing that should stick out here, is that when the searchlight extends beyond the data, it ends up using fewer points.
+You can get around this by making your mask larger than your center points...
+
+```python
+new_mask = np.zeros([10,10,10])
+new_mask[4:8, 4:8, 4:8] = 1
+new_data = np.zeros([10,10,10, 2])
+new_data[4:8, 4:8, 4:8] = data
+kwargs['shape'] = new_mask.shape
+centers = gen_searchlight_ind(thr=0, mask=new_mask, **kwargs)
+result4 = run_searchlight(centers, np.shape, new_data, center_kwargs=kwargs)
+
+result4
+
+#{(4, 4, 4): (27, 2),
+# (4, 4, 5): (27, 2),
+# (4, 4, 6): (27, 2),
+# ...
+#}
+```
+
+After making this example, I decided to should probably add an option to require searchlight is completely within array.
+
+
 ### Cut the Crap, Let's do a Bonifide Searchlight
 
 
