@@ -58,14 +58,19 @@ def gen_searchlight_ind(centers=None, mask=None, thr=.7, output='', **kwargs):
 @arg('total_ind', type=lambda x: np.load(x)[()]['centers'], help='total centers in searchlight')
 @arg('batch_num', type=int, help='batch number')
 @arg('batch_ttl', type=int, help='total batches')
-def calc_slices(total_ind, batch_num, batch_ttl, print_uniq=False):
+@arg('--print_uniq', type=int, help='cutoff if printing uniq voxels')
+def calc_slices(total_ind, batch_num, batch_ttl, print_uniq=0):
     """Convenience function for breaking centers into batches for parallel jobs.
     
     Note that voxels are returned as [(x, y, z), ...]
     """
-    if hasattr(total_ind, '__len__'): total_ind = len(total_ind)
+    if hasattr(total_ind, '__len__'): tmp = total_ind; total_ind = len(total_ind)
     step = total_ind / (batch_ttl - bool(total_ind % batch_ttl))
     chunks = [slice(ii, ii+step) for ii in range(0, total_ind, step)]
+
+    if print_uniq:
+        centers = tmp[chunks[batch_num]]
+        print len(unique_vox(centers, print_uniq))
     return chunks[batch_num]
 
 def unique_vox(centers, cutoff, shape=(70,70,70)):
@@ -107,9 +112,11 @@ def sub_from_batches(subnum, batches, ref_nii, empty=-2):
     """
     example_entry = batches[0].itervalues().next()
 
-    dv_dims = example_entry.shape[1:]
+    # assume first dim of dv is subject if subnum is given
+    dv_dims = example_entry.shape[subnum is not None:]
     dim_xyz = ref_nii.shape[:-1]
 
+    print "entry shape: ", example_entry.shape
     print "dv dims: ", dv_dims
     print "xyz: ", dim_xyz
     
@@ -120,13 +127,14 @@ def sub_from_batches(subnum, batches, ref_nii, empty=-2):
         for coord, entry in batch.iteritems():
             # cast coord into tuple just in case it is a list 
             # (np would index differently)
-            dat[tuple(coord)] = entry[subnum]
+            dat[tuple(coord)] = entry[subnum] if subnum is not None else entry
             
     nii = nib.Nifti1Image(dat, ref_nii.get_affine(), ref_nii.get_header())
     return nii
     
 
 @arg('ref_nii', type=nib.load, help="example nifti for output hdr and shape")
+@arg('--subs', type=int, nargs='+', help='subject numbers to stitch, specifiy "all" to stitch all')
 def stitch(in_dir, out_dir, ref_nii, empty=-2, subs=None):
     """Stitch together individual nifti for each subject in batches.
 
@@ -135,7 +143,7 @@ def stitch(in_dir, out_dir, ref_nii, empty=-2, subs=None):
         out_dir: output directory (will hold subject niftis)
         ref_nii: reference nifti
         empty  : default value for empty voxels
-        subs   : subjects to stitch (defaults to all)
+        subs   : subjects to stitch (defaults to assuming no subs in data)
 
     """
     # make all directories necessary
@@ -146,16 +154,23 @@ def stitch(in_dir, out_dir, ref_nii, empty=-2, subs=None):
     batches = [np.load(fname)[()] for fname in batch_files]  # TODO could change to iterator (if memory concerns)
     example_entry = batches[0][batches[0].keys()[0]]
 
-    subs = subs if subs else range(example_entry.shape[0])
-    print "N Subs: ", len(subs)
 
-    for subnum in subs:
-        print 'stitching: ', subnum
-        nii = sub_from_batches(subnum, batches, ref_nii, empty=empty)
-        nib.save(nii, os.path.join(out_dir, 'sub_' + str(subnum) + '.nii.gz'))
+    if subs is None:
+        nii = sub_from_batches(subs, batches, ref_nii, empty=empty)
+        nib.save(nii, os.path.join(out_dir, 'stitched'  + '.nii.gz'))
+        
+    else:
+        if -1 in subs: subs = range(example_entry.shape[0])
+        print "N Subs: ", len(subs)
+        for subnum in subs:
+            print 'stitching: ', subnum
+            nii = sub_from_batches(subnum, batches, ref_nii, empty=empty)
+            nib.save(nii, os.path.join(out_dir, 'sub_' + str(subnum) + '.nii.gz'))
 
 
 
+
+import time
 @arg('centers', type=lambda x: np.load(x)[()]['centers'], help="npy file with center points")
 @arg('d', type=str, help="folder with data (as npy or nii)")
 @arg('center_kwargs', type=lambda x: np.load(x)[()]['kwargs'], help="npy file with kwargs for getting center points")
@@ -174,7 +189,10 @@ def run_pattern_searchlight(centers, d, center_kwargs, output,
     print "number of centers is:\t", len(centers)
     print "number of voxels is:\t", len(all_indices[0])
 
+    print "loading data..."
+    t1 = time.time()
     if type(d) is str: d = [SubMMap(fname, all_indices) for fname in glob(d)]
+    print "loading took ", time.time() - t1, " seconds"
     if type(TRs) is str: TRs = pd.read_csv(TRs)
     # prepare output directory
     try: os.makedirs(output)
@@ -194,10 +212,14 @@ def run_pattern_searchlight(centers, d, center_kwargs, output,
 # Searchlight Functions -------------------------------------------------------
 
 from glob import glob
+import gc
 class SubMMap:
     def __init__(self, fname, all_indices):
         self.fname = fname
-        self.data = self.hash_indices(load_nii_or_npy(self.fname), all_indices)
+        tmp_d = load_nii_or_npy(fname)
+        self.data = self.hash_indices(tmp_d, all_indices)
+        del tmp_d
+        gc.collect()
 
     def __getitem__(self, x):
         return np.array([self.data[ind] for ind in zip(*x)])
