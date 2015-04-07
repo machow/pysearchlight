@@ -112,9 +112,11 @@ def sub_from_batches(subnum, batches, ref_nii, empty=-2):
     """
     example_entry = batches[0].itervalues().next()
 
-    dv_dims = example_entry.shape[1:]
+    # assume first dim of dv is subject if subnum is given
+    dv_dims = example_entry.shape[subnum is not None:]
     dim_xyz = ref_nii.shape[:-1]
 
+    print "entry shape: ", example_entry.shape
     print "dv dims: ", dv_dims
     print "xyz: ", dim_xyz
     
@@ -125,13 +127,14 @@ def sub_from_batches(subnum, batches, ref_nii, empty=-2):
         for coord, entry in batch.iteritems():
             # cast coord into tuple just in case it is a list 
             # (np would index differently)
-            dat[tuple(coord)] = entry[subnum]
+            dat[tuple(coord)] = entry[subnum] if subnum is not None else entry
             
     nii = nib.Nifti1Image(dat, ref_nii.get_affine(), ref_nii.get_header())
     return nii
     
 
 @arg('ref_nii', type=nib.load, help="example nifti for output hdr and shape")
+@arg('--subs', type=int, nargs='+', help='subject numbers to stitch, specifiy "all" to stitch all')
 def stitch(in_dir, out_dir, ref_nii, empty=-2, subs=None):
     """Stitch together individual nifti for each subject in batches.
 
@@ -140,7 +143,7 @@ def stitch(in_dir, out_dir, ref_nii, empty=-2, subs=None):
         out_dir: output directory (will hold subject niftis)
         ref_nii: reference nifti
         empty  : default value for empty voxels
-        subs   : subjects to stitch (defaults to all)
+        subs   : subjects to stitch (defaults to assuming no subs in data)
 
     """
     # make all directories necessary
@@ -151,13 +154,19 @@ def stitch(in_dir, out_dir, ref_nii, empty=-2, subs=None):
     batches = [np.load(fname)[()] for fname in batch_files]  # TODO could change to iterator (if memory concerns)
     example_entry = batches[0][batches[0].keys()[0]]
 
-    subs = subs if subs else range(example_entry.shape[0])
-    print "N Subs: ", len(subs)
 
-    for subnum in subs:
-        print 'stitching: ', subnum
-        nii = sub_from_batches(subnum, batches, ref_nii, empty=empty)
-        nib.save(nii, os.path.join(out_dir, 'sub_' + str(subnum) + '.nii.gz'))
+    if subs is None:
+        nii = sub_from_batches(subs, batches, ref_nii, empty=empty)
+        nib.save(nii, os.path.join(out_dir, 'stitched'  + '.nii.gz'))
+        
+    else:
+        if -1 in subs: subs = range(example_entry.shape[0])
+        print "N Subs: ", len(subs)
+        for subnum in subs:
+            print 'stitching: ', subnum
+            nii = sub_from_batches(subnum, batches, ref_nii, empty=empty)
+            nib.save(nii, os.path.join(out_dir, 'sub_' + str(subnum) + '.nii.gz'))
+
 
 
 
