@@ -129,5 +129,6 @@ After making this example, I decided to should probably add an option to require
 Format for Parallel Jobs
 ------------------------
 
-Example
+Examples
 -------
+See the Ipython notebooks in the `example` folder, or view them [here](http://nbviewer.ipython.org/github/machow/pysearchlight/tree/master/example/).
