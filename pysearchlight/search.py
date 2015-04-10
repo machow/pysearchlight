@@ -13,6 +13,8 @@ from methods import pattern_similarity
 
 # TODO rename cutoff of radius?
 @arg('--mask', type=load_nii_or_npy)
+@arg('--cutoff', type=int)
+@arg('--metric', default='euclidean')
 def gen_searchlight_ind(centers=None, mask=None, thr=.7, output='', **kwargs):
     """Find all indices from centers with usable voxels over threshold.
 
