@@ -184,7 +184,16 @@ import time
 def run_pattern_searchlight(centers, d, center_kwargs, output,
                             TRs="", offset_TR=0, nan_thresh = .7,
                             batch_num=None, batches_ttl=None):
-    """Convenience wrapper for searchlight running pattern similarity"""
+    """Convenience wrapper for searchlight running pattern similarity
+    
+    Parameters:
+        centers:        list of indices corresponding to data (e.g. [(xyz1), (xyz2)]
+        d:              data (may be string for npy or nii file)
+        center_kwargs:  dictionary with parameters used to generate centers
+        output:         folder for saving results
+        batch_num:      this batches number if running in parallel
+        batches_ttl:    total batches
+    """
 
     all_indices = zip(*unique_vox(centers, center_kwargs['cutoff']))
 
