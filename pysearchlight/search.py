@@ -72,13 +72,13 @@ def calc_slices(total_ind, batch_num, batch_ttl, print_uniq=0):
 
     if print_uniq:
         centers = tmp[chunks[batch_num]]
-        print len(unique_vox(centers, print_uniq))
+        print len(unique_vox(centers, print_uniq, 'euclidean')) #TODO remove hard-coded metrics
     return chunks[batch_num]
 
-def unique_vox(centers, cutoff, shape=(70,70,70)):
+def unique_vox(centers, cutoff, shape=(70,70,70), metric='euclidean'): #TODO remove hard-coded metrics
     s = set()
     for c in centers:
-        s.update(zip(*searchlight_ind(c, cutoff, shape)))
+        s.update(zip(*searchlight_ind(c, cutoff, shape, metric)))
     return list(s)
 
 @arg('fdir', type=str, help="directory where batches are saved")
@@ -195,14 +195,22 @@ def run_pattern_searchlight(centers, d, center_kwargs, output,
         batches_ttl:    total batches
     """
 
-    all_indices = zip(*unique_vox(centers, center_kwargs['cutoff']))
+    all_indices = zip(*unique_vox(centers, **center_kwargs))
 
     print "number of centers is:\t", len(centers)
     print "number of voxels is:\t", len(all_indices[0])
 
     print "loading data..."
+
+    indx = calc_slices(len(centers), batch_num, batches_ttl)
+    print "slice is:\t", indx
+
+    chunk_centers = centers[indx]
+    chunk_indices = zip(*unique_vox(chunk_centers, **center_kwargs))
+
+    print "number of voxels in batch is:\t", len(chunk_indices[0])
     t1 = time.time()
-    if type(d) is str: d = [SubMMap(fname, all_indices) for fname in glob(d)]
+    if type(d) is str: d = [SubMMap(fname, chunk_indices) for fname in glob(d)]
     print "loading took ", time.time() - t1, " seconds"
     if type(TRs) is str: TRs = pd.read_csv(TRs)
     # prepare output directory
@@ -211,10 +219,6 @@ def run_pattern_searchlight(centers, d, center_kwargs, output,
 
     output = os.path.join(output, str(batch_num))
 
-    indx = calc_slices(len(centers), batch_num, batches_ttl)
-    print "slice is:\t",
-    print indx
-    chunk_centers = centers[indx]
 
     run_searchlight(chunk_centers, pattern_similarity, d, 
                     center_kwargs = center_kwargs, output = output,
