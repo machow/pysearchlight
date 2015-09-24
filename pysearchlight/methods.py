@@ -34,8 +34,8 @@ def crosscor_full(A, B=None, nan_thresh=None):
     Returns:
         seg x seg correlation matrix
     """
-    # standardize all along last dim, so don't need to in correlation
-    A = standardize(A)
+    # standardize all along last dim, so don't need to in correlation 
+    A = standardize(A, rm_nan=True)
 
     all_cors = []
     # Within group correlations
@@ -45,8 +45,8 @@ def crosscor_full(A, B=None, nan_thresh=None):
             # check for nan
             to_remove = np.any(np.isnan(sub), axis=0)
             if np.any(to_remove):
-                tmp_sub = sub[...,to_remove]
-                tmp_others = others[..., to_remove]
+                tmp_sub = sub[...,~to_remove]
+                tmp_others = others[..., ~to_remove]
             else:
                 tmp_sub, tmp_others = sub, others
             # cross correlate (1 x seg x seg)
