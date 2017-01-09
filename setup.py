@@ -7,6 +7,7 @@ setup(name='pysearchlight',
       author='Michael Chow',
       author_email='machow@princeton.edu',
       packages=['pysearchlight'],
+      install_requires = ['numpy', 'pandas', 'nibabel', 'argh'],
       entry_points = {
           'console_scripts': ['pysearch=pysearchlight.search:main']
           },
